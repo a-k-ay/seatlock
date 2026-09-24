@@ -1,0 +1,37 @@
+What We Built (in order)
+Step	File	Role
+
+1	pom.xml + application.properties	Bring Spring Security + JJWT library into the app, add JWT secret & expiration
+2a	User, UserRepository	Map the existing users table into Java land
+2a	LoginRequest, LoginResponse	Request/response DTOs for the login endpoint
+2b	JwtService	Create + verify JWTs (the "token factory")
+2b	AuthController	The public /auth/login endpoint — takes email+password, returns a JWT
+2c	JwtAuthenticationFilter	Runs on every request — checks for a Bearer token, sets the user identity if valid
+2c	SecurityConfig	The orchestrator — says which paths are public, which need auth, and adds the filter to Spring's chain
+
+The Two Flows That Come Alive
+
+Login Flow (public, no token yet)
+
+1. Client → POST /auth/login with email + password
+2. AuthController → UserRepository.findByEmail
+3. PasswordEncoder.matches(input, storedHash) → verifies password
+4. JwtService.issueToken(user) → creates signed JWT
+5. Response: { token, tokenType: "Bearer", expiresInSeconds }
+
+Protected Flow (needs token)
+
+1. Client → GET /events with header Authorization: Bearer <token>
+2. JwtAuthenticationFilter runs first — extracts token, verifies signature, extracts user id
+3. Sets SecurityContextHolder with the user id
+4. Spring Security's default authorizationHttpRequests check: is this path protected? Is user authenticated? → yes → allow
+5. Request reaches your controller as normal
+6. If token missing/invalid → SecurityContext empty → Spring returns 401 Unauthorized
+
+The Three Load-Bearing Pieces
+
+1. SecurityConfig — the traffic cop. Without it, Spring Security defaults to blocking everything.
+2. JwtAuthenticationFilter — the gate. Without it, tokens are never checked.
+3. JwtService — the factory. Without it, no tokens can be made or verified.
+
+Everything else is just data (DTOs, entity, repository) and one public endpoint (AuthController).
