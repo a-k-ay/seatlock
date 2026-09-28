@@ -7,6 +7,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.server.ResponseStatusException;
 
+import com.seatlock.holds.SeatsUnavailableException;
+
 import java.util.Map;
 
 @RestControllerAdvice
@@ -21,6 +23,16 @@ public class GlobalExceptionHandler {
         }
         return ResponseEntity.status(HttpStatus.CONFLICT)
                 .body(Map.of("error", "CONSTRAINT_VIOLATION"));
+    }
+
+    @ExceptionHandler(SeatsUnavailableException.class)
+    public ResponseEntity<Map<String, Object>> handleSeatsUnavailable(SeatsUnavailableException ex) {
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(Map.of(
+                        "error", "SEAT_UNAVAILABLE",
+                        "unavailableSeatIds", ex.getUnavailableSeatIds()
+                ));
     }
 
     @ExceptionHandler(ResponseStatusException.class)

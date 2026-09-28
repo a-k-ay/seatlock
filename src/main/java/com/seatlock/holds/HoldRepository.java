@@ -11,4 +11,6 @@ public interface HoldRepository extends JpaRepository<Hold, UUID> {
     Optional<Hold> findBySeatIdAndStatus(UUID seatId, HoldStatus status);
 
     List<Hold> findByUserIdAndStatus(UUID userId, HoldStatus status);
+
+    List<Hold> findByStatusAndSeatIdIn(HoldStatus status, List<UUID> seatIds);
 }
