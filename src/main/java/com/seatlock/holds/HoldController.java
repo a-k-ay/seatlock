@@ -9,6 +9,10 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.UUID;
+import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+
 import com.fasterxml.jackson.core.type.TypeReference;
 
 import java.net.URI;
@@ -81,6 +85,12 @@ public class HoldController {
 
         return ResponseEntity.status(HttpStatus.CREATED).body(holds);
     }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> cancelHold(@PathVariable UUID id) {
+        holdService.cancelHold(id);
+        return ResponseEntity.noContent().build();
+    }    
 
     private String toJson(Object obj) {
         try {

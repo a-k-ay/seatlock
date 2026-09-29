@@ -107,6 +107,28 @@ public class HoldService {
         return results;
         }
 
+        @Transactional
+        public void cancelHold(UUID holdId) {
+        UUID currentUserId = currentUserId();
+
+        Hold hold = holdRepository.findById(holdId)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND,
+                        "Hold not found: " + holdId));
+
+        if (!hold.getUser().getId().equals(currentUserId)) {
+                throw new ResponseStatusException(HttpStatus.FORBIDDEN,
+                        "You can only cancel your own holds");
+        }
+
+        if (hold.getStatus() != HoldStatus.ACTIVE) {
+                throw new ResponseStatusException(HttpStatus.CONFLICT,
+                        "Hold is not active (current status: " + hold.getStatus() + ")");
+        }
+
+        hold.setStatus(HoldStatus.CANCELLED);
+        holdRepository.save(hold);
+        }        
+
     private UUID currentUserId() {
         Object principal = SecurityContextHolder.getContext()
                 .getAuthentication().getPrincipal();
