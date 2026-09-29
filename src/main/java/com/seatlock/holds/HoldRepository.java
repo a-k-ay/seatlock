@@ -17,6 +17,7 @@ public interface HoldRepository extends JpaRepository<Hold, UUID> {
 
     List<Hold> findByStatusAndSeatIdIn(HoldStatus status, List<UUID> seatIds);
 
+    List<Hold> findBySeatId(UUID seatId);
 
     @Modifying
     @Query(value = """
