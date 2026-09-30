@@ -25,7 +25,7 @@ services:
   seatlock:
     build: .
     ports:
-      - "8080:8080"
+      - "127.0.0.1:8080:8080"
     environment:
       SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/seatlock
       SPRING_DATASOURCE_USERNAME: seatlock
