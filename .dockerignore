@@ -1,0 +1,15 @@
+target/
+.git/
+.gitignore
+.gitattributes
+.idea/
+.vscode/
+*.iml
+docs/
+README.md
+*.md
+.mvn/wrapper/*.jar
+Dockerfile
+.dockerignore
+docker-compose.yml
+node_modules/
