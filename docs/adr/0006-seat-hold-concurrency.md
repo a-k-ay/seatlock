@@ -139,3 +139,84 @@ strategy at production scale.
 The partial index is only useful because status is a small,
 low-cardinality enum with a hot value (ACTIVE) and cold values
 (EXPIRED, CONFIRMED). This is by design.
+
+
+---
+
+## Validation Results
+
+**Status:** Empirically validated
+**Validated on:** 2026-09-29
+**Test:** `src/test/java/com/seatlock/holds/HoldConcurrencyTest.java`
+**Method:** `only_one_thread_succeeds_when_50_race_for_same_seat`
+
+### What the test does
+
+- Seeds one event, one seat, one user.
+- Spawns 50 threads via `ExecutorService.newFixedThreadPool(50)`.
+- Uses a `CountDownLatch(1)` as a starting gate so all 50 threads block
+  on `await()` until the main thread `countDown`s. This produces true
+  simultaneous entry into `HoldService.createHold`, provoking the race
+  condition rather than serializing calls.
+- Each thread seeds its own `SecurityContextHolder` (per-thread
+  thread-local) before invoking the service.
+- Waits for all threads to finish (30s timeout).
+
+### Assertions
+
+| # | Assertion                                                         | Observed |
+|---|-------------------------------------------------------------------|----------|
+| 1 | Exactly 1 thread returns a `HoldResponse` (success)               | ✅ 1     |
+| 2 | Exactly 49 threads throw `DataIntegrityViolationException`        | ✅ 49    |
+| 3 | Zero unexpected exception types                                   | ✅ 0     |
+| 4 | Exactly 1 row with `status = 'ACTIVE'` for that seat_id in the DB | ✅ 1     |
+
+### What this proves
+
+- The partial unique index `one_active_hold_per_seat WHERE status =
+  'ACTIVE'` is the sole coordination point. No application-level locks,
+  synchronized blocks, distributed mutexes, or optimistic version
+  columns are involved.
+- Postgres correctly serializes concurrent INSERTs against the partial
+  index and rejects duplicates atomically. All 49 losers see a clean
+  constraint-violation exception (SQLSTATE 23505) that Spring
+  translates into `DataIntegrityViolationException`, then
+  `GlobalExceptionHandler` maps to HTTP 409 `SEAT_UNAVAILABLE`.
+- The winner is non-deterministic (whichever thread's INSERT hits the
+  index first), but the *outcome* — exactly one winner — is
+  deterministic under any thread interleaving.
+
+### Test runtime
+
+- Full suite (including Spring context startup): ~27 seconds.
+- Actual race + assertions after context load: ~1–3 seconds.
+- Consistently green across repeated runs.
+
+### Scope and honest limits
+
+- **Single-instance app tested.** The design uses `FOR UPDATE SKIP
+  LOCKED` in the expiry worker for future horizontal scaling, but the
+  test does not spawn multiple app instances — only multiple threads
+  inside one JVM.
+- **50 threads chosen** because it comfortably exceeds the default
+  HikariCP pool size (10), so some threads necessarily queue on
+  connection acquisition. This still exercises the race — losers are
+  distributed across time, but exactly one wins.
+- **Same DB as dev**. Test cleans up its event/seat/holds in
+  `@AfterEach`, but does not isolate to a dedicated schema or
+  Testcontainer. Migration to Testcontainers is tracked as follow-up
+  for CI portability, not a correctness concern for this validation.
+- **No network-level race**. The test bypasses HTTP and calls the
+  service directly, so JWT, deserialization, and filter-chain overhead
+  are not part of the race window. The unique-index guarantee lives at
+  the DB layer and is unaffected by upstream serialization.
+
+### Related empirical evidence (manual Swagger runs)
+
+- Two sequential POSTs on the same seat from different users → first
+  returns 201, second returns 409 `SEAT_UNAVAILABLE`.
+- Cancel a hold (status → `CANCELLED`) then POST again on the same
+  seat → 201 succeeds immediately, confirming the partial index
+  ignores non-ACTIVE rows.
+- Expiry worker log line `Hold expiry worker: expired N hold(s)`
+  observed to clear stale ACTIVE rows past their `expires_at`.

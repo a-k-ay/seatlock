@@ -16,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import io.micrometer.core.instrument.MeterRegistry;
 
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -33,6 +34,7 @@ public class HoldService {
     private final SeatRepository seatRepository;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final MeterRegistry meterRegistry;
 
     @Value("${seatlock.holds.ttl-minutes}")
     private long ttlMinutes;
@@ -60,6 +62,7 @@ public class HoldService {
                 .build();
 
             Hold saved = holdRepository.saveAndFlush(hold);
+            meterRegistry.counter("seatlock.holds.created", "outcome", "success").increment();
             return HoldResponse.from(saved);
 
     }
@@ -101,6 +104,7 @@ public class HoldService {
                         .build();
 
                 Hold saved = holdRepository.saveAndFlush(hold);
+                meterRegistry.counter("seatlock.holds.created", "outcome", "success").increment(results.size());
                 results.add(HoldResponse.from(saved));
         }
 
@@ -127,6 +131,7 @@ public class HoldService {
 
         hold.setStatus(HoldStatus.CANCELLED);
         holdRepository.save(hold);
+        meterRegistry.counter("seatlock.holds.cancelled").increment();
         }        
 
     private UUID currentUserId() {
